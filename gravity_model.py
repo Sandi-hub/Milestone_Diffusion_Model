@@ -8,9 +8,7 @@ from scipy.spatial import distance_matrix
 
 
 def import_population_data():
-    gdf_population = gpd.read_file(
-        r"Sample_Data\population_data_Hamburg_2011 selection.shp"
-    )
+    gdf_population = gpd.read_file(r"Shapefiles\population_data_Hamburg_2011.shp")
     gdf_population = gdf_population[
         ["Gitter_ID_", "Einwohner", "x_mp_100m", "y_mp_100m"]
     ]
@@ -36,9 +34,7 @@ def get_distance_matrix(production, consumption):
 
 
 def import_shop_data():
-    gdf_Hamburg_shops = gpd.read_file(
-        r"Sample_Data\Hamburg_Shops_with_Gitter_ID selection.shp"
-    )
+    gdf_Hamburg_shops = gpd.read_file(r"Shapefiles\Hamburg_Shops_with_Gitter_ID.shp")
     gdf_Hamburg_shops = gdf_Hamburg_shops[
         [
             "ID",
@@ -212,11 +208,39 @@ def hyman_model(empirical_mean_shopping_distance, tolerance):
                 beta_best, dist_matrix, production_potential, consumption_potential
             )
             break
-    print(
-        "On the %sd. iteration: distance between the modeled and the empirical mean shopping distance is down to %3.4f"
-        % (
-            count_loops,
-            abs(empirical_mean_shopping_distance - modeled_means_list[count_loops]),
+        print(
+            "On the %sd. iteration: distance between the modeled and the empirical mean shopping distance is down to %3.4f"
+            % (
+                count_loops,
+                abs(empirical_mean_shopping_distance - modeled_means_list[count_loops]),
+            )
         )
+
+        if np.isnan(empirical_mean_shopping_distance):
+            raise Exception(
+                "Something went wrong, the given empirical mean shopping distance returned nan!"
+            )
+        if np.isnan(modeled_means_list[count_loops]):
+            raise Exception(
+                "Something went wrong, the current modeled mean shopping distance is nan!"
+            )
+
+    beta_best = beta_list.pop()
+    # Sanity Check
+    tol_this_time = np.abs(empirical_mean_shopping_distance - modeled_mean_current)
+    tol_best = np.abs(
+        [empirical_mean_shopping_distance - d for d in modeled_means_list]
+    ).tolist()
+    if tol_this_time > tol_best[tol_best.index(min(tol_best))]:
+        beta_best = beta_list[tol_best.index(min(tol_best))]
+        flow = furness_model(
+            beta_best, dist_matrix, production_potential, consumption_potential
+        )
+    print(
+        "On the last iteration (%2d.): tolerance is down to %3.4f"
+        % (tol_best.index(min(tol_best)), tol_best[tol_best.index(min(tol_best))])
     )
+    print("Beta is " + str(beta_best))
+
+    return flow
 
