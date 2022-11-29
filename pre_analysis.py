@@ -29,9 +29,6 @@ def get_flow(all_stores, selected_stores):
     return(selected_flow)
 
 
-
-
-
 def get_stores(chain_name):
     all_stores = import_shop_data()
     selected_stores = all_stores[all_stores["Name"] == chain_name]
@@ -49,5 +46,4 @@ flow = get_flow(all_stores, stores_Aldi)
 print(import_shop_data().groupby(["Name"]).agg({"ID": "count", "TotalSales": "sum"}))
 
 
-# print(shops_data.groupby(["Gitter_ID_"])
-# print(only_multiple.head())
+
