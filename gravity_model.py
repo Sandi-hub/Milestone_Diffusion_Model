@@ -27,7 +27,7 @@ def get_distance_matrix(production, consumption):
     arr_distance = distance_matrix(production_centroids, consumption_centroids,)
     arr_distance = arr_distance / 1000
 
-    # TODO: inneren oder äußeren Kreis?
+    # TODO inneren oder äußeren Kreis?
     arr_distance[arr_distance == 0] = (128 / (45 * math.pi)) * 50
 
     return arr_distance
@@ -56,7 +56,6 @@ def import_shop_data():
             "NEARDIST",
             "Gitter_ID_",
             "Einwohner",
-            "geometry",
         ]
     ]
     gdf_Hamburg_shops = gdf_Hamburg_shops.rename(
@@ -65,8 +64,8 @@ def import_shop_data():
     return gdf_Hamburg_shops
 
 
-def get_production_potential(shops_data):
-
+def get_production_potential():
+    shops_data = import_shop_data()
     production_potential = shops_data.groupby(["Gitter_ID_"]).agg(
         {"ID": "count", "TotalSales": "sum"}
     )
@@ -114,36 +113,50 @@ def get_weighted_dist(flow_matrix, dist_matrix):
     return WeightDist
 
 
+def add_indices(flow, production_potential, consumption_potential):
+    df_flow = pd.DataFrame(
+        flow,
+        columns=consumption_potential.index,  # ["Gitter_ID_"],
+        index=production_potential.index,  # ["Gitter_ID_"],
+    )
+    return df_flow
+
+
 def hyman_model(empirical_mean_shopping_distance, tolerance):
-    beta_list = []
+    beta_list = []  # keeping track of the betas
     modeled_means_list = []  # keeping track of the average of the modeled flow distance
     count_loops = 0
 
-    # initializing Hyman
+    # initializing Hyman with beta_0
     beta_0 = 1.0 / empirical_mean_shopping_distance
     beta_list.append(beta_0)
+
+    # import required input data
     population_data = import_population_data()
-    shops_data = import_shop_data()
-    production_potential = get_production_potential(shops_data)  # rows
+
+    # clean input data (removal of columns)
+    production_potential = get_production_potential()  # rows
     total_revenue = production_potential["production_potential"].sum()
     consumption_potential = get_consumption_potential(population_data, total_revenue)
     production_potential = production_potential.merge(
         population_data, on="Gitter_ID_", how="left",
     )
-    # [["Gitter_ID_", "x_mp_100m", "y_mp_100m"]]
+
     dist_matrix = get_distance_matrix(production_potential, consumption_potential)
-    # Todo: die Achsten stehen jetzt für unterschiedliche Gitter_Zellen --> überprüfen ob das noch korrekt ist
-    flow0 = furness_model(
+    # TODO die Achsten stehen jetzt für unterschiedliche Gitter_Zellen --> überprüfen ob das noch korrekt ist
+
+    flow_0 = furness_model(
         beta_0, dist_matrix, production_potential, consumption_potential
     )
-    modeled_mean_shopping_distance = get_weighted_dist(flow0, dist_matrix)
+
+    modeled_mean_shopping_distance = get_weighted_dist(flow_0, dist_matrix)
     modeled_means_list.append(modeled_mean_shopping_distance)
 
     if (
         abs(empirical_mean_shopping_distance - modeled_means_list[count_loops])
         <= tolerance
     ):
-        flow = flow0
+        flow = flow_0
     while (
         abs(empirical_mean_shopping_distance - modeled_means_list[count_loops])
         > tolerance
@@ -226,6 +239,7 @@ def hyman_model(empirical_mean_shopping_distance, tolerance):
             )
 
     beta_best = beta_list.pop()
+
     # Sanity Check
     tol_this_time = np.abs(empirical_mean_shopping_distance - modeled_mean_current)
     tol_best = np.abs(
@@ -242,5 +256,7 @@ def hyman_model(empirical_mean_shopping_distance, tolerance):
     )
     print("Beta is " + str(beta_best))
 
-    return flow
+    flow_end = add_indices(flow, production_potential, consumption_potential)
+
+    return flow_end
 
