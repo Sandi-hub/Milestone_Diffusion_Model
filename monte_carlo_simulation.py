@@ -4,9 +4,9 @@ import pandas as pd
 
 from gravity_model import *
 
-no_of_cases = 5
+no_of_cases = 50  # 20  # 5
 # As we want to make the artificial Outbreaks reproducible, we set the seed for the generation of random numbers
-random.seed(4)
+random.seed(2)  # 4
 
 
 def get_flow(all_stores, selected_stores):
@@ -56,6 +56,7 @@ def get_flow(all_stores, selected_stores):
 
 def get_stores(chain_name):
     all_stores = import_shop_data()
+    # Probably we need chain instead of name here
     selected_stores = all_stores[all_stores["Name"] == chain_name]
     return selected_stores
 
@@ -106,18 +107,21 @@ def get_xy(outbreak_scenario):
 
 def create_shapefile(outbreak_scenario):
     coordinates = get_xy(outbreak_scenario)
+    crs = "epsg:3035"
     gdf = gpd.GeoDataFrame(
         coordinates["Gitter_ID_"],
-        geometry=gpd.points_from_xy(coordinates["x_mp_100m"], coordinates["y_mp_100m"]),
+        geometry=gpd.points_from_xy(
+            coordinates["x_mp_100m"], coordinates["y_mp_100m"], crs=crs
+        ),
     )
-    gdf.to_file("outbreak_cases/Aldi_outbreak.shp")
+    gdf.to_file("outbreak_cases/Aldi_outbreak_4.shp")
 
 
-stores_Aldi = get_stores("Aldi")
+stores_selected_chain = get_stores("Aldi")
 
 all_stores = get_production_potential()
 
-flow = get_flow(all_stores, stores_Aldi)
+flow = get_flow(all_stores, stores_selected_chain)
 
 cumulative_distribution = get_cumulative_distribution(flow)
 
