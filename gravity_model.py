@@ -13,6 +13,9 @@ def import_population_data():
         ["Gitter_ID_", "Einwohner", "x_mp_100m", "y_mp_100m"]
     ]
     gdf_population = gdf_population.set_index("Gitter_ID_")
+    # For this purpose, we will assume that actually no one lives in cells with -1 (TODO: mit Hanno klären
+    gdf_population["Einwohner"] = gdf_population["Einwohner"].replace([-1], 0)
+
     return gdf_population
 
 
@@ -76,10 +79,7 @@ def get_production_potential():
 
 
 def get_consumption_potential(population_data, total_revenue):
-    # For this purpose, we will assume that actually no one lives in cells with -1 (TODO: mit Hanno klären)
-    from cmath import nan
 
-    population_data["Einwohner"] = population_data["Einwohner"].replace([-1], 0)
     total_population = population_data["Einwohner"].sum()
     population_data["consumption_potential"] = (
         population_data["Einwohner"].divide(total_population)
