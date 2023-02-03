@@ -1,20 +1,24 @@
+import os
 import random
 
 import pandas as pd
 
 from gravity_model import *
 
-no_of_cases = 50  # 20  # 5
+chain_Name = "Aldi"
+no_of_cases = 50
+outbreak_filename = chain_Name + str(no_of_cases)
+
 # As we want to make the artificial Outbreaks reproducible, we set the seed for the generation of random numbers
-random.seed(2)  # 4
+random.seed(2)
 
 
 def get_flow(all_stores, selected_stores):
     # First we need to get all cells in which there are two stores:
-    flow = pd.read_pickle("./Output_Flow/flow.pkl")
+    flow = pd.read_pickle("Outputs\Flow\flow.pkl")
 
     # First we a are selecting all flows from cells where there is a store of the given chain inside
-    selected_flow = flow[flow.index.isin(selected_stores.Gitter_ID_)]
+    selected_flow = flow[flow.index.isin(selected_stores.Gitter_ID)]
 
     # These flows are correct unless there is more than the one store of the given chain in any cell
     # First we only selected the cells in which there are more than one store
@@ -22,11 +26,11 @@ def get_flow(all_stores, selected_stores):
 
     # Now we merge it to the existing flow
     selected_flow = selected_flow.merge(
-        only_multiple["production_potential"], on="Gitter_ID_", how="left"
+        only_multiple["production_potential"], on="Gitter_ID", how="left"
     )
-    selected_stores.set_index("Gitter_ID_", inplace=True)
+    selected_stores.set_index("Gitter_ID", inplace=True)
     selected_flow = selected_flow.merge(
-        selected_stores["TotalSales"], on="Gitter_ID_", how="left"
+        selected_stores["TotalSales"], on="Gitter_ID", how="left"
     )
 
     adjusted_rows = (
@@ -56,8 +60,7 @@ def get_flow(all_stores, selected_stores):
 
 def get_stores(chain_name):
     all_stores = import_shop_data()
-    # Probably we need chain instead of name here
-    selected_stores = all_stores[all_stores["Name"] == chain_name]
+    selected_stores = all_stores[all_stores["Chain"] == chain_name]
     return selected_stores
 
 
@@ -99,9 +102,9 @@ def get_location_for_outbreak(cumulative_distribution):
 
 
 def get_xy(outbreak_scenario):
-    df = pd.DataFrame({"Gitter_ID_": outbreak_scenario})
+    df = pd.DataFrame({"Gitter_ID": outbreak_scenario})
     population_data = import_population_data()
-    df = df.merge(population_data, on="Gitter_ID_", how="left")
+    df = df.merge(population_data, on="Gitter_ID", how="left")
     return df
 
 
@@ -109,15 +112,16 @@ def create_shapefile(outbreak_scenario):
     coordinates = get_xy(outbreak_scenario)
     crs = "epsg:3035"
     gdf = gpd.GeoDataFrame(
-        coordinates["Gitter_ID_"],
+        coordinates["Gitter_ID"],
         geometry=gpd.points_from_xy(
-            coordinates["x_mp_100m"], coordinates["y_mp_100m"], crs=crs
+            coordinates["x_centroid"], coordinates["y_centroid"], crs=crs
         ),
     )
-    gdf.to_file("outbreak_cases/Aldi_outbreak_4.shp")
+    os.makedirs("Outputs/Outbreaks", exist_ok=True)
+    gdf.to_file("Outputs/Outbreaks/" + outbreak_filename + ".shp")
 
 
-stores_selected_chain = get_stores("Aldi")
+stores_selected_chain = get_stores(chain_Name)
 
 all_stores = get_production_potential()
 
@@ -132,6 +136,4 @@ for j in range(0, no_of_cases):
 print(outbreak_scenario)
 
 create_shapefile(outbreak_scenario)
-# get a list of all chain names and their stores count:
-# print(import_shop_data().groupby(["Name"]).agg({"ID": "count", "TotalSales": "sum"}))
 

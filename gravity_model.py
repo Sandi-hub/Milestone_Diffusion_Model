@@ -8,68 +8,54 @@ from scipy.spatial import distance_matrix
 
 
 def import_population_data():
-    gdf_population = gpd.read_file(r"Shapefiles\population_data_Hamburg_2011.shp")
-    gdf_population = gdf_population[
-        ["Gitter_ID_", "Einwohner", "x_mp_100m", "y_mp_100m"]
-    ]
-    gdf_population = gdf_population.set_index("Gitter_ID_")
-    # For this purpose, we will assume that actually no one lives in cells with -1 (TODO: mit Hanno klären
-    gdf_population["Einwohner"] = gdf_population["Einwohner"].replace([-1], 0)
+    gdf_population = gpd.read_file(
+        r"Outputs\Shapefile Population Data\population_data_Hamburg_2011.shp"
+    )
 
+    # We drop the geometry data since we only the the centroids for the gravity model
+    gdf_population = gdf_population[
+        ["Gitter_ID", "population", "x_centroid", "y_centroid"]
+    ]
+    gdf_population = gdf_population.set_index("Gitter_ID")
+
+    # The value of -1 in the column "population" means either uninhabited or to be kept secret. We will assume that all cells with a value of -1 are uninhabited
+    gdf_population["population"] = gdf_population["population"].replace([-1], 0)
     return gdf_population
 
 
 def get_distance_matrix(production, consumption):
     production_centroids = pd.concat(
-        [production.x_mp_100m, production.y_mp_100m], axis=1
+        [production.x_centroid, production.y_centroid], axis=1
     )
     consumption_centroids = pd.concat(
-        [consumption.x_mp_100m, consumption.y_mp_100m], axis=1
+        [consumption.x_centroid, consumption.y_centroid], axis=1
     )
 
     arr_distance = distance_matrix(production_centroids, consumption_centroids,)
+    # We need to make sure that the empirical mean shopping distance is in the same unit of measurement as the distances
     arr_distance = arr_distance / 1000
 
-    # TODO inneren oder äußeren Kreis?
     arr_distance[arr_distance == 0] = (128 / (45 * math.pi)) * 50
 
     return arr_distance
 
 
 def import_shop_data():
-    gdf_Hamburg_shops = gpd.read_file(r"Shapefiles\Hamburg_Shops_with_Gitter_ID.shp")
+    gdf_Hamburg_shops = gpd.read_file(
+        r"Input Data\Shops Data\Hamburg_Shops_with_Gitter_ID.shp"
+    )
     gdf_Hamburg_shops = gdf_Hamburg_shops[
-        [
-            "ID",
-            "Name",
-            "Address",
-            "Zip",
-            "Type",
-            "TypeAg",
-            "SalesSqMTo",
-            "SalesSqMOr",
-            "TotalSales",
-            "Size",
-            "Warehouse",
-            "Chain",
-            "Neighborho",
-            "District",
-            "AreaSqM",
-            "Income",
-            "NEARDIST",
-            "Gitter_ID_",
-            "Einwohner",
-        ]
+        ["ID", "Name", "TotalSales", "Chain", "Gitter_ID_", "Einwohner"]
     ]
     gdf_Hamburg_shops = gdf_Hamburg_shops.rename(
-        columns={"AreaSqM": "NH_AreaSqM", "Neighborho": "Neighborhood"}
+        columns={"Einwohner": "population", "Gitter_ID_": "Gitter_ID"}
     )
     return gdf_Hamburg_shops
 
 
 def get_production_potential():
     shops_data = import_shop_data()
-    production_potential = shops_data.groupby(["Gitter_ID_"]).agg(
+    production_potential = shops_data.groupby(["Gitter_ID"]).agg(
         {"ID": "count", "TotalSales": "sum"}
     )
     production_potential = production_potential.rename(
@@ -80,11 +66,11 @@ def get_production_potential():
 
 def get_consumption_potential(population_data, total_revenue):
 
-    total_population = population_data["Einwohner"].sum()
+    total_population = population_data["population"].sum()
     population_data["consumption_potential"] = (
-        population_data["Einwohner"].divide(total_population)
+        population_data["population"].divide(total_population)
     ).multiply(total_revenue)
-    population_data = population_data[population_data["Einwohner"] != 0]
+    population_data = population_data[population_data["population"] != 0]
     return population_data
 
 
@@ -115,14 +101,22 @@ def get_weighted_dist(flow_matrix, dist_matrix):
 
 def add_indices(flow, production_potential, consumption_potential):
     df_flow = pd.DataFrame(
-        flow,
-        columns=consumption_potential.index,  # ["Gitter_ID_"],
-        index=production_potential.index,  # ["Gitter_ID_"],
+        flow, columns=consumption_potential.index, index=production_potential.index,
     )
     return df_flow
 
 
 def hyman_model(empirical_mean_shopping_distance, tolerance):
+    """ calibrates the parameter (beta) of a gravity model. This parameter is the input for the furness-algorithm to calculate the flow of goods. 
+        Hardcoded here is the exponential distance model
+
+    Args:
+        empirical_mean_shopping_distance (float): used to compare the modeled mean distance 
+        tolerance (float): needed to decide when a satisfactory solution is reached
+
+    Returns:
+        flow(numpy.ndarray): _description_
+    """
     beta_list = []  # keeping track of the betas
     modeled_means_list = []  # keeping track of the average of the modeled flow distance
     count_loops = 0
@@ -131,7 +125,7 @@ def hyman_model(empirical_mean_shopping_distance, tolerance):
     beta_0 = 1.0 / empirical_mean_shopping_distance
     beta_list.append(beta_0)
 
-    # import required input data
+    # import the population data
     population_data = import_population_data()
 
     # clean input data (removal of columns)
@@ -139,11 +133,10 @@ def hyman_model(empirical_mean_shopping_distance, tolerance):
     total_revenue = production_potential["production_potential"].sum()
     consumption_potential = get_consumption_potential(population_data, total_revenue)
     production_potential = production_potential.merge(
-        population_data, on="Gitter_ID_", how="left",
+        population_data, on="Gitter_ID", how="left",
     )
 
     dist_matrix = get_distance_matrix(production_potential, consumption_potential)
-    # TODO die Achsten stehen jetzt für unterschiedliche Gitter_Zellen --> überprüfen ob das noch korrekt ist
 
     flow_0 = furness_model(
         beta_0, dist_matrix, production_potential, consumption_potential

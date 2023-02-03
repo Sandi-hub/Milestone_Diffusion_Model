@@ -1,5 +1,2 @@
-.xlsx
-.csv
-Data/
 *.lock
 __pycache__/
