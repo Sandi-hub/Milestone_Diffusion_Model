@@ -5,9 +5,9 @@ import pandas as pd
 
 from gravity_model import *
 
-chain_Name = "Aldi"
+chain_name = "Aldi"
 no_of_cases = 50
-outbreak_filename = chain_Name + str(no_of_cases)
+outbreak_filename = chain_name + str(no_of_cases)
 
 # As we want to make the artificial Outbreaks reproducible, we set the seed for the generation of random numbers
 random.seed(2)
@@ -121,7 +121,7 @@ def create_shapefile(outbreak_scenario):
     gdf.to_file("Outputs/Outbreaks/" + outbreak_filename + ".shp")
 
 
-stores_selected_chain = get_stores(chain_Name)
+stores_selected_chain = get_stores(chain_name)
 
 all_stores = get_production_potential()
 
