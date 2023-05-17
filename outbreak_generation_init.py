@@ -62,7 +62,6 @@ for chain in chains.index:
         continue
     if chain == "Netto":
         for no_of_outbreak_cases in list_outbreak_scenario_sizes:
-            print(chains[chain])
             # Set the number of simulations, If only 1 store, we only simulate one outbreak
             # if chains[chain] == 1:
             #     no_of_trials_per_scenario = 1
@@ -84,7 +83,6 @@ for chain in chains.index:
                     + "/"
                     + str(trial)
                 )
-                print(outbreak_filename)
 
                 outbreak_scenario_cells = generate_outbreak(
                     chain, no_of_outbreak_cases, sales_per_cell
