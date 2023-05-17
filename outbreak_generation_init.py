@@ -1,6 +1,7 @@
 import os
 import random
 
+import geopandas as gpd
 import pandas as pd
 
 from gravity_model import *
