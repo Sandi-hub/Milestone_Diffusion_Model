@@ -15,31 +15,39 @@ def import_population_data():
     )
 
     # We drop the geometry data since we only the the centroids for the gravity model
-    gdf_population = gdf_population[
+    df_population = gdf_population[
         ["Gitter_ID", "population", "x_centroid", "y_centroid"]
     ]
-    gdf_population = gdf_population.set_index("Gitter_ID")
+    df_population = df_population.set_index("Gitter_ID")
 
     # The value of -1 in the column "population" means either uninhabited or to be kept secret. We will assume that all cells with a value of -1 are uninhabited
-    gdf_population["population"] = gdf_population["population"].replace([-1], 0)
-    return gdf_population
+    df_population["population"] = df_population["population"].replace([-1], 0)
+    
+    os.makedirs("Outputs/Population", exist_ok=True)
+    df_population.to_pickle("Outputs/Population/population.pkl")
+    
+    return df_population
 
 def import_shop_data():
     gdf_Hamburg_shops = gpd.read_file(
         r"Input Data\Shops Data\Hamburg_Shops_with_Gitter_ID.shp"
     )
-    gdf_Hamburg_shops = gdf_Hamburg_shops[
+    df_Hamburg_shops = gdf_Hamburg_shops[
         ["ID", "Name", "TotalSales", "Chain", "Gitter_ID_", "Einwohner"]
     ]
-    gdf_Hamburg_shops = gdf_Hamburg_shops.rename(
+    df_Hamburg_shops = df_Hamburg_shops.rename(
         columns={"Einwohner": "population", "Gitter_ID_": "Gitter_ID"}
     )
-    return gdf_Hamburg_shops
+    
+    os.makedirs("Outputs/Retailer", exist_ok=True)
+    df_Hamburg_shops.to_pickle("Outputs/Retailer/stores.pkl")
+    
+    return df_Hamburg_shops
 
-gdf_population = import_population_data()
-gdf_Hamburg_shops = import_shop_data()
+df_population = import_population_data()
+df_Hamburg_shops = import_shop_data()
 
-flow = hyman_model(empirical_mean_shopping_distance, tolerance, gdf_population, gdf_Hamburg_shops)
+flow = hyman_model(empirical_mean_shopping_distance, tolerance, df_population, df_Hamburg_shops)
 
 os.makedirs("Outputs/Flow", exist_ok=True)
 flow.to_pickle("Outputs/Flow/flow.pkl")
