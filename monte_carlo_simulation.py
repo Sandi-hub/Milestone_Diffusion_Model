@@ -1,21 +1,13 @@
-import os
 import random
 
 import pandas as pd
 
 from gravity_model import *
 
-chain_name = "Aldi"
-no_of_cases = 50
-outbreak_filename = chain_name + str(no_of_cases)
-
-# As we want to make the artificial Outbreaks reproducible, we set the seed for the generation of random numbers
-random.seed(2)
-
 
 def get_flow(all_stores, selected_stores):
     # First we need to get all cells in which there are two stores:
-    flow = pd.read_pickle("Outputs\Flow\flow.pkl")
+    flow = pd.read_pickle(r"Outputs\Flow\flow.pkl")
 
     # First we a are selecting all flows from cells where there is a store of the given chain inside
     selected_flow = flow[flow.index.isin(selected_stores.Gitter_ID)]
@@ -58,8 +50,7 @@ def get_flow(all_stores, selected_stores):
     return selected_flow
 
 
-def get_stores(chain_name):
-    all_stores = import_shop_data()
+def get_stores(chain_name, all_stores):
     selected_stores = all_stores[all_stores["Chain"] == chain_name]
     return selected_stores
 
@@ -101,39 +92,16 @@ def get_location_for_outbreak(cumulative_distribution):
                 pass
 
 
-def get_xy(outbreak_scenario):
-    df = pd.DataFrame({"Gitter_ID": outbreak_scenario})
-    population_data = import_population_data()
-    df = df.merge(population_data, on="Gitter_ID", how="left")
-    return df
+def generate_outbreak(chain_name, no_of_cases, all_stores):
+    stores_selected_chain = get_stores(chain_name, all_stores)
 
+    sales_per_cell = get_production_potential(all_stores)
 
-def create_shapefile(outbreak_scenario):
-    coordinates = get_xy(outbreak_scenario)
-    crs = "epsg:3035"
-    gdf = gpd.GeoDataFrame(
-        coordinates["Gitter_ID"],
-        geometry=gpd.points_from_xy(
-            coordinates["x_centroid"], coordinates["y_centroid"], crs=crs
-        ),
-    )
-    os.makedirs("Outputs/Outbreaks", exist_ok=True)
-    gdf.to_file("Outputs/Outbreaks/" + outbreak_filename + ".shp")
+    flow = get_flow(sales_per_cell, stores_selected_chain)
 
+    cumulative_distribution = get_cumulative_distribution(flow)
 
-stores_selected_chain = get_stores(chain_name)
-
-all_stores = get_production_potential()
-
-flow = get_flow(all_stores, stores_selected_chain)
-
-cumulative_distribution = get_cumulative_distribution(flow)
-
-
-outbreak_scenario = []
-for j in range(0, no_of_cases):
-    outbreak_scenario.append(get_location_for_outbreak(cumulative_distribution))
-print(outbreak_scenario)
-
-create_shapefile(outbreak_scenario)
-
+    outbreak_scenario = []
+    for j in range(0, no_of_cases):
+        outbreak_scenario.append(get_location_for_outbreak(cumulative_distribution))
+    return outbreak_scenario
