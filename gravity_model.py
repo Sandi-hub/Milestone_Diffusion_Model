@@ -7,22 +7,6 @@ from ipfn import ipfn
 from scipy.spatial import distance_matrix
 
 
-def import_population_data():
-    gdf_population = gpd.read_file(
-        r"Outputs\Shapefile Population Data\population_data_Hamburg_2011.shp"
-    )
-
-    # We drop the geometry data since we only the the centroids for the gravity model
-    gdf_population = gdf_population[
-        ["Gitter_ID", "population", "x_centroid", "y_centroid"]
-    ]
-    gdf_population = gdf_population.set_index("Gitter_ID")
-
-    # The value of -1 in the column "population" means either uninhabited or to be kept secret. We will assume that all cells with a value of -1 are uninhabited
-    gdf_population["population"] = gdf_population["population"].replace([-1], 0)
-    return gdf_population
-
-
 def get_distance_matrix(production, consumption):
     production_centroids = pd.concat(
         [production.x_centroid, production.y_centroid], axis=1
@@ -39,22 +23,7 @@ def get_distance_matrix(production, consumption):
 
     return arr_distance
 
-
-def import_shop_data():
-    gdf_Hamburg_shops = gpd.read_file(
-        r"Input Data\Shops Data\Hamburg_Shops_with_Gitter_ID.shp"
-    )
-    gdf_Hamburg_shops = gdf_Hamburg_shops[
-        ["ID", "Name", "TotalSales", "Chain", "Gitter_ID_", "Einwohner"]
-    ]
-    gdf_Hamburg_shops = gdf_Hamburg_shops.rename(
-        columns={"Einwohner": "population", "Gitter_ID_": "Gitter_ID"}
-    )
-    return gdf_Hamburg_shops
-
-
-def get_production_potential():
-    shops_data = import_shop_data()
+def get_production_potential(shops_data):
     production_potential = shops_data.groupby(["Gitter_ID"]).agg(
         {"ID": "count", "TotalSales": "sum"}
     )
@@ -106,7 +75,7 @@ def add_indices(flow, production_potential, consumption_potential):
     return df_flow
 
 
-def hyman_model(empirical_mean_shopping_distance, tolerance):
+def hyman_model(empirical_mean_shopping_distance, tolerance, population_data, shops_data):
     """ calibrates the parameter (beta) of a gravity model. This parameter is the input for the furness-algorithm to calculate the flow of goods. 
         Hardcoded here is the exponential distance model
 
@@ -125,11 +94,9 @@ def hyman_model(empirical_mean_shopping_distance, tolerance):
     beta_0 = 1.0 / empirical_mean_shopping_distance
     beta_list.append(beta_0)
 
-    # import the population data
-    population_data = import_population_data()
 
     # clean input data (removal of columns)
-    production_potential = get_production_potential()  # rows
+    production_potential = get_production_potential(shops_data)  # rows
     total_revenue = production_potential["production_potential"].sum()
     consumption_potential = get_consumption_potential(population_data, total_revenue)
     production_potential = production_potential.merge(
