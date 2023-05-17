@@ -1,6 +1,5 @@
 import math
 
-import geopandas as gpd
 import numpy as np
 import pandas as pd
 from ipfn import ipfn
@@ -15,13 +14,17 @@ def get_distance_matrix(production, consumption):
         [consumption.x_centroid, consumption.y_centroid], axis=1
     )
 
-    arr_distance = distance_matrix(production_centroids, consumption_centroids,)
+    arr_distance = distance_matrix(
+        production_centroids,
+        consumption_centroids,
+    )
     # We need to make sure that the empirical mean shopping distance is in the same unit of measurement as the distances
     arr_distance = arr_distance / 1000
 
     arr_distance[arr_distance == 0] = (128 / (45 * math.pi)) * 50
 
     return arr_distance
+
 
 def get_production_potential(shops_data):
     production_potential = shops_data.groupby(["Gitter_ID"]).agg(
@@ -34,7 +37,6 @@ def get_production_potential(shops_data):
 
 
 def get_consumption_potential(population_data, total_revenue):
-
     total_population = population_data["population"].sum()
     population_data["consumption_potential"] = (
         population_data["population"].divide(total_population)
@@ -70,17 +72,21 @@ def get_weighted_dist(flow_matrix, dist_matrix):
 
 def add_indices(flow, production_potential, consumption_potential):
     df_flow = pd.DataFrame(
-        flow, columns=consumption_potential.index, index=production_potential.index,
+        flow,
+        columns=consumption_potential.index,
+        index=production_potential.index,
     )
     return df_flow
 
 
-def hyman_model(empirical_mean_shopping_distance, tolerance, population_data, shops_data):
-    """ calibrates the parameter (beta) of a gravity model. This parameter is the input for the furness-algorithm to calculate the flow of goods. 
+def hyman_model(
+    empirical_mean_shopping_distance, tolerance, population_data, shops_data
+):
+    """calibrates the parameter (beta) of a gravity model. This parameter is the input for the furness-algorithm to calculate the flow of goods.
         Hardcoded here is the exponential distance model
 
     Args:
-        empirical_mean_shopping_distance (float): used to compare the modeled mean distance 
+        empirical_mean_shopping_distance (float): used to compare the modeled mean distance
         tolerance (float): needed to decide when a satisfactory solution is reached
 
     Returns:
@@ -94,13 +100,14 @@ def hyman_model(empirical_mean_shopping_distance, tolerance, population_data, sh
     beta_0 = 1.0 / empirical_mean_shopping_distance
     beta_list.append(beta_0)
 
-
     # clean input data (removal of columns)
     production_potential = get_production_potential(shops_data)  # rows
     total_revenue = production_potential["production_potential"].sum()
     consumption_potential = get_consumption_potential(population_data, total_revenue)
     production_potential = production_potential.merge(
-        population_data, on="Gitter_ID", how="left",
+        population_data,
+        on="Gitter_ID",
+        how="left",
     )
 
     dist_matrix = get_distance_matrix(production_potential, consumption_potential)
@@ -219,4 +226,3 @@ def hyman_model(empirical_mean_shopping_distance, tolerance, population_data, sh
     flow_end = add_indices(flow, production_potential, consumption_potential)
 
     return flow_end
-
