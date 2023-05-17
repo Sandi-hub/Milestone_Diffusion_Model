@@ -46,6 +46,6 @@ gdf_census = gdf_census.rename(
 
 # Write the resulting polygons to a Shapefile
 gdf_census.to_file(
-    filename=r"Outputs\Shapefile Population Data\population_data_Hamburg_2011.shp",
+    filename=r"Outputs\Population\Shapefile Population Data\population_data_Hamburg_2011.shp",
     driver="ESRI Shapefile",
 )
