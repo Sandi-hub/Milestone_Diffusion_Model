@@ -24,8 +24,10 @@ def get_distance_matrix(production, consumption):
     )
 
     arr_distance = distance_matrix(production_centroids, consumption_centroids,)
-    # in-cell distance shouldn't be zero and is set according to Czuber (1884)
-    arr_distance[arr_distance == 0] = (128 / (45 * math.pi)) * 0.05
+    # We need to make sure that the empirical mean shopping distance is in the same unit of measurement as the distances
+    arr_distance = arr_distance / 1000
+
+    arr_distance[arr_distance == 0] = (128 / (45 * math.pi)) * 50
 
     sanity_check(arr_distance, "distance matrix")
 
@@ -44,15 +46,11 @@ def get_consumption_potential(population_data, total_revenue):
     total_population = population_data["population"].sum()
     if total_population == 0:
         raise ValueError("Total population cannot be zero.")
-    consumption_potential = population_data.copy()
-    consumption_potential["consumption_potential"] = (
-        consumption_potential["population"].divide(total_population)
+    population_data["consumption_potential"] = (
+        population_data["population"].divide(total_population)
     ).multiply(total_revenue)
-    consumption_potential = consumption_potential[
-        consumption_potential["population"] != 0
-    ]
-    sanity_check(consumption_potential.consumption_potential, "consumption potential")
-    return consumption_potential
+    population_data = population_data[population_data["population"] != 0]
+    return population_data
 
 
 def furness_model(
@@ -88,10 +86,10 @@ def add_indices(flow, production_potential, consumption_potential):
 
 
 def hyman_model(
-    empirical_mean_shopping_distance, tolerance, population_data, shops_data, istoy
+    empirical_mean_shopping_distance, tolerance, population_data, shops_data
 ):
     """calibrates the parameter (beta) of a gravity model. This parameter is the input for the furness-algorithm to calculate the flow of goods.
-        The exponential distance model is hardcoded
+        Hardcoded here is the exponential distance model
 
     Args:
         empirical_mean_shopping_distance (float): used to compare the modeled mean distance
@@ -100,18 +98,6 @@ def hyman_model(
     Returns:
         flow(numpy.ndarray): _description_
     """
-    # For shops_data
-    if "cell_id" in shops_data.columns:
-        shops_data.set_index("cell_id", inplace=True)
-
-    # For population_data
-    if "cell_id" in population_data.columns:
-        population_data.set_index("cell_id", inplace=True)
-
-    if istoy:
-        shops_data.index = shops_data.index.astype(int)
-        population_data.index = population_data.index.astype(int)
-
     beta_list = []  # keeping track of the betas
     modeled_means_list = []  # keeping track of the average of the modeled flow distance
     count_loops = 0
@@ -120,18 +106,15 @@ def hyman_model(
     beta_0 = 1.0 / empirical_mean_shopping_distance
     beta_list.append(beta_0)
 
+    # clean input data (removal of columns)
     production_potential = get_production_potential(shops_data)  # rows
-
     total_revenue = production_potential["production_potential"].sum()
     consumption_potential = get_consumption_potential(population_data, total_revenue)
-
     production_potential = production_potential.merge(
-        population_data.drop(columns=["population"]), on="cell_id", how="left"
+        population_data, on="Gitter_ID", how="left",
     )
 
-    dist_matrix = get_distance_matrix(
-        production_potential, consumption_potential, istoy
-    )
+    dist_matrix = get_distance_matrix(production_potential, consumption_potential)
 
     flow_0 = furness_model(
         beta_0, dist_matrix, production_potential, consumption_potential
@@ -145,9 +128,6 @@ def hyman_model(
         <= tolerance
     ):
         flow = flow_0
-        modeled_mean_current = get_weighted_dist(flow, dist_matrix)
-        modeled_means_list.append(modeled_mean_current)
-
     while (
         abs(empirical_mean_shopping_distance - modeled_means_list[count_loops])
         > tolerance
@@ -247,22 +227,6 @@ def hyman_model(
     )
     print("Beta is " + str(beta_best))
 
-    sanity_check(flow, "flow matrix")
-    if not np.allclose(
-        flow.sum(axis=1), production_potential.production_potential.to_numpy(), atol=2
-    ):
-        raise ValueError("Row sums do not match production potential.")
-    if not np.allclose(
-        flow.sum(axis=0),
-        consumption_potential.consumption_potential.to_numpy(),
-        atol=2,
-    ):
-        raise ValueError("Column sums do not match consumption potential.")
-
     flow_end = add_indices(flow, production_potential, consumption_potential)
 
-    return (
-        flow_end,
-        beta_best,
-        tol_best[tol_best.index(min(tol_best))],
-    )
+    return flow_end
